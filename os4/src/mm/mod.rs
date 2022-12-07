@@ -15,10 +15,10 @@ mod page_table;
 
 pub use address::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use address::{StepByOne, VPNRange};
-pub use frame_allocator::{frame_alloc, FrameTracker};
+pub use frame_allocator::{frame_alloc, FrameTracker, get_num_empty_frame};
 pub use memory_set::remap_test;
 pub use memory_set::{MapPermission, MemorySet, KERNEL_SPACE};
-pub use page_table::{translated_byte_buffer, PageTableEntry};
+pub use page_table::{translated_byte_buffer, vpn_range_is_unused, vpn_range_is_used, PageTableEntry};
 pub use page_table::{PTEFlags, PageTable};
 
 /// initiate heap allocator, frame allocator and kernel space

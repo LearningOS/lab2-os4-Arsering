@@ -1,5 +1,7 @@
 //! Implementation of [`PageTableEntry`] and [`PageTable`].
 
+use crate::config::PAGE_SIZE;
+
 use super::{frame_alloc, FrameTracker, PhysPageNum, StepByOne, VirtAddr, VirtPageNum};
 use alloc::vec;
 use alloc::vec::Vec;
@@ -62,7 +64,7 @@ impl PageTableEntry {
 }
 
 /// page table structure
-/** root_ppn: 页表一级节点所在的PhysPageNum, 
+/** root_ppn: 页表一级节点所在的PhysPageNum,
     frams: 整个页表所包含的节点（一级、二级、三级）所在的PhysPageNum
 */
 pub struct PageTable {
@@ -108,7 +110,7 @@ impl PageTable {
         result
     }
     /// 返回vpn在页表（self）中的页表项
-    fn find_pte(&self, vpn: VirtPageNum) -> Option<&PageTableEntry> {
+    pub fn find_pte(&self, vpn: VirtPageNum) -> Option<&PageTableEntry> {
         let idxs = vpn.indexes();
         let mut ppn = self.root_ppn;
         let mut result: Option<&PageTableEntry> = None;
@@ -143,7 +145,7 @@ impl PageTable {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.find_pte(vpn).copied()
     }
-    /// 
+    ///
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
     }
@@ -170,4 +172,30 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+
+/// 如果给定的虚拟地址范围中的地址在给定的pagetable中都没被占用（被关联了物理页），返回true
+pub fn vpn_range_is_unused(pt: &mut PageTable, start: usize, len: usize) -> bool {
+    for id in (start..(start + len)).filter(|x| (x % PAGE_SIZE == 0))  {
+        let va = VirtPageNum::from(id);
+        let tmp = pt.find_pte_create(va).unwrap();
+        
+        if tmp.is_valid() {
+            return false
+        }
+    }
+    true
+}
+
+/// 如果给定的虚拟地址范围中的地址在给定的pagetable中都被占用（被关联了物理页），返回true
+pub fn vpn_range_is_used(pt: &PageTable, start: usize, len: usize) -> bool {
+    for id in (start..(start + len)).filter(|x| (x % PAGE_SIZE == 0)) {
+        let va = VirtPageNum::from(id);
+        let tmp = pt.find_pte(va);
+        if let None = tmp {
+            false;
+        };
+    }
+    true
 }

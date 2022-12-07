@@ -1,6 +1,8 @@
 //! Implementation of [`MapArea`] and [`MemorySet`].
 
-use super::{frame_alloc, FrameTracker};
+use super::{
+    frame_alloc, get_num_empty_frame, vpn_range_is_unused, vpn_range_is_used, FrameTracker,
+};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
@@ -239,6 +241,64 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+
+    pub fn mmap(&mut self, start: usize, len: usize, port: usize) -> isize {
+        let len_n = (len - 1 + PAGE_SIZE) / PAGE_SIZE;
+        let start_n = start / PAGE_SIZE;
+        let pt = &mut self.page_table;
+
+        if VirtAddr(start).page_offset() != 0
+            || (port & !0x7) != 0
+            || port & 0x7 == 0
+            || get_num_empty_frame() < len_n
+            || !vpn_range_is_unused(pt, start_n, len_n)
+        {
+            -1
+        } else {
+            if len == 0 {
+                0
+            } else {
+                let mut map_perm = MapPermission::U;
+                if port & 0x1 != 0 {
+                    map_perm |= MapPermission::R;
+                }
+                if port & 0x2 != 0 {
+                    map_perm |= MapPermission::W;
+                }
+                if port & 0x4 != 0 {
+                    map_perm |= MapPermission::X;
+                }
+
+                self.insert_framed_area(
+                    VirtAddr::from(VirtPageNum::from(start_n)),
+                    VirtAddr::from(VirtPageNum::from(len_n + start_n)),
+                    map_perm,
+                );
+                0
+            }
+        }
+    }
+
+    pub fn munmap(&mut self, start: usize, len: usize) -> isize {
+        let pt = &mut self.page_table;
+        if start % PAGE_SIZE != 0 || !vpn_range_is_used(pt, start, len) || len % PAGE_SIZE != 0 {
+            -1
+        } else {
+            let start_va = start / PAGE_SIZE;
+            let end_va = (len + start) / PAGE_SIZE;
+
+            // 循环体
+            for map_area in &mut self.areas {
+                if map_area.vpn_range.get_start().0 == start_va
+                    && map_area.vpn_range.get_end().0 <= end_va
+                {
+                    map_area.unmap(pt);
+                    break;
+                }
+            }
+            0
+        }
+    }
 }
 
 /// map area structure, controls a contiguous piece of virtual memory
@@ -288,6 +348,7 @@ impl MapArea {
         let pte_flags = PTEFlags::from_bits(self.map_perm.bits).unwrap();
         page_table.map(vpn, ppn, pte_flags);
     }
+    /// 将vpn在page_table对应的页表项删除，并将对应的物理页回收
     #[allow(unused)]
     pub fn unmap_one(&mut self, page_table: &mut PageTable, vpn: VirtPageNum) {
         #[allow(clippy::single_match)]
@@ -306,6 +367,7 @@ impl MapArea {
             self.map_one(page_table, vpn);
         }
     }
+    /// 将self.vpn_range中的所有vpn对应的页表项都删除，并将相应的物理页回收
     #[allow(unused)]
     pub fn unmap(&mut self, page_table: &mut PageTable) {
         for vpn in self.vpn_range {

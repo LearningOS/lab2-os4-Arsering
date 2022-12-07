@@ -1,6 +1,6 @@
 //! Types related to task management
 use super::TaskContext;
-use crate::config::{kernel_stack_position, TRAP_CONTEXT};
+use crate::config::{kernel_stack_position, TRAP_CONTEXT, MAX_SYSCALL_NUM};
 use crate::mm::{MapPermission, MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::trap::{trap_handler, TrapContext};
 
@@ -11,6 +11,9 @@ pub struct TaskControlBlock {
     pub memory_set: MemorySet,
     pub trap_cx_ppn: PhysPageNum, // trapcontext对应的物理页的页号（应用空间）
     pub base_size: usize, // user stack的栈顶
+
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+    pub start_time: usize,
 }
 
 impl TaskControlBlock {
@@ -43,6 +46,9 @@ impl TaskControlBlock {
             memory_set,
             trap_cx_ppn,
             base_size: user_sp,
+
+            syscall_times: [0 as u32; MAX_SYSCALL_NUM],
+            start_time: 0 as usize,
         };
         // prepare TrapContext in user space
         // 注意：本函数第一行代码中创建memory_set的过程中并没有初始化TrapContext对应的物理页，这里就是初始化一下
