@@ -1,7 +1,11 @@
 //! Process management syscalls
 
-use crate::config::MAX_SYSCALL_NUM;
-use crate::task::{exit_current_and_run_next, suspend_current_and_run_next, get_phyaddress_from_current_task, TaskStatus};
+use crate::config::{MAX_SYSCALL_NUM};
+use crate::task::{
+    exit_current_and_run_next, suspend_current_and_run_next, TaskStatus, 
+    get_status_of_current_task, get_syscall_times_of_current_task, get_start_time_of_current_task,
+    get_phyaddress_from_current_task, mmap, munmap
+};
 use crate::timer::get_time_us;
 
 #[repr(C)]
@@ -31,7 +35,7 @@ pub fn sys_yield() -> isize {
 }
 
 // YOUR JOB: 引入虚地址后重写 sys_get_time
-pub fn sys_get_time(ts: *mut TimeVal, tz: usize) -> isize {
+pub fn sys_get_time(ts: *mut TimeVal, _tz: usize) -> isize {
     let us = get_time_us();
     
     let ts_tmp = get_phyaddress_from_current_task(ts as usize);
@@ -52,15 +56,32 @@ pub fn sys_set_priority(_prio: isize) -> isize {
 }
 
 // YOUR JOB: 扩展内核以实现 sys_mmap 和 sys_munmap
-pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
-    -1
+pub fn sys_mmap(start: usize, len: usize, port: usize) -> isize {
+    // MapArea::new(
+    //     TRAP_CONTEXT.into(),
+    //     TRAMPOLINE.into(),
+    //     MapType::Framed,
+    //     MapPermission::R | MapPermission::W,
+    // );
+    // MapArea::new(start_va, end_va, MapType::Framed, map_perm);
+    mmap(start, len, port)
 }
 
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
-    -1
+pub fn sys_munmap(start: usize, len: usize) -> isize {
+    munmap(start, len)
 }
 
 // YOUR JOB: 引入虚地址后重写 sys_task_info
 pub fn sys_task_info(ti: *mut TaskInfo) -> isize {
-    -1
+    let ts_tmp = get_phyaddress_from_current_task(ti as usize);
+    
+    let ti = ts_tmp as *mut TaskInfo;
+    unsafe {
+        *ti = TaskInfo{
+            status: get_status_of_current_task(),
+            syscall_times: get_syscall_times_of_current_task(),
+            time: (get_time_us() - get_start_time_of_current_task()) / 1_000,
+        }
+    }
+    0
 }

@@ -9,6 +9,7 @@ pub fn get_num_app() -> usize {
 }
 
 /// get applications data
+/// 物理内存取出对应第app_id个应用程序的文件（格式为字节）
 pub fn get_app_data(app_id: usize) -> &'static [u8] {
     extern "C" {
         fn _num_app();

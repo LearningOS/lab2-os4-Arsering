@@ -41,6 +41,7 @@ trait FrameAllocator {
     fn new() -> Self;
     fn alloc(&mut self) -> Option<PhysPageNum>;
     fn dealloc(&mut self, ppn: PhysPageNum);
+    fn get_num_empty_frame(&self) -> usize;
 }
 
 /// an implementation for frame allocator
@@ -83,6 +84,10 @@ impl FrameAllocator for StackFrameAllocator {
         // recycle
         self.recycled.push(ppn);
     }
+
+    fn get_num_empty_frame(&self) -> usize {
+        self.recycled.len() + (self.end - self.current)
+    }
 }
 
 type FrameAllocatorImpl = StackFrameAllocator;
@@ -115,6 +120,13 @@ pub fn frame_alloc() -> Option<FrameTracker> {
 /// deallocate a frame
 fn frame_dealloc(ppn: PhysPageNum) {
     FRAME_ALLOCATOR.exclusive_access().dealloc(ppn);
+}
+
+/// 计算先有为分配的内存容量
+pub fn get_num_empty_frame() -> usize {
+    FRAME_ALLOCATOR
+        .exclusive_access()
+        .get_num_empty_frame()
 }
 
 #[allow(unused)]
